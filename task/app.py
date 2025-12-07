@@ -1,33 +1,49 @@
 import asyncio
 
+from task.clients.base import BaseClient
 from task.clients.client import DialClient
+from task.clients.custom_client import DialClient as DialCustomClient
 from task.constants import DEFAULT_SYSTEM_PROMPT
 from task.models.conversation import Conversation
 from task.models.message import Message
 from task.models.role import Role
 
 
+COMMAND_EXIT = 'exit'
+MODEL = 'gpt-4.1-nano-2025-04-14'
+
+
 async def start(stream: bool) -> None:
-    #TODO:
-    # 1.1. Create DialClient
-    # (you can get available deployment_name via https://ai-proxy.lab.epam.com/openai/models
-    #  you can import Postman collection to make a request, file in the project root `dial-basics.postman_collection.json`
-    #  don't forget to add your API_KEY)
-    # 1.2. Create CustomDialClient
-    # 2. Create Conversation object
-    # 3. Get System prompt from console or use default -> constants.DEFAULT_SYSTEM_PROMPT and add to conversation
-    #    messages.
-    # 4. Use infinite cycle (while True) and get yser message from console
-    # 5. If user message is `exit` then stop the loop
-    # 6. Add user message to conversation history (role 'user')
-    # 7. If `stream` param is true -> call DialClient#stream_completion()
-    #    else -> call DialClient#get_completion()
-    # 8. Add generated message to history
-    # 9. Test it with DialClient and CustomDialClient
-    # 10. In CustomDialClient add print of whole request and response to see what you send and what you get in response
-    raise NotImplementedError
+    user_client_input = input("Use custom client? (y/N): ")
+    use_custom_client = user_client_input or user_client_input in "Yy"
+    client: BaseClient = DialCustomClient(MODEL) if use_custom_client else DialClient(MODEL)
+
+    conversation = Conversation()
+
+    user_system_prompt = input(f'Enter system prompt or leave blank to use default ("{DEFAULT_SYSTEM_PROMPT}"): ')
+    system_prompt = user_system_prompt or DEFAULT_SYSTEM_PROMPT
+    print(f"System prompt: {system_prompt}")
+    client.get_completion([Message(Role.SYSTEM, system_prompt)])
+
+    while True:
+        user_input = input("Me: ")
+        if user_input == COMMAND_EXIT:
+            break
+
+        user_message = Message(Role.USER, user_input)
+        conversation.messages.append(user_message)
+
+        print('AI:', end=' ')
+        if stream:
+            ai_message = await client.stream_completion(conversation.messages)
+        else:
+            ai_message = client.get_completion(conversation.messages)
+
+        conversation.messages.append(ai_message)
 
 
+user_stream_input = input("Do you need streaming answers? (Y/n): ")
+use_stream_response = not user_stream_input or user_stream_input not in "Nn"
 asyncio.run(
-    start(True)
+    start(stream=use_stream_response)
 )
